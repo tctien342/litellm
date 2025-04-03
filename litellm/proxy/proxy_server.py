@@ -2878,6 +2878,21 @@ async def async_assistants_data_generator(
         yield f"data: {error_returned}\n\n"
 
 
+
+def ensure_serializable(data: BaseModel) -> BaseModel:
+    """
+    Workaround for https://github.com/pydantic/pydantic/issues/7713, 
+    see https://github.com/pydantic/pydantic/issues/7713#issuecomment-2604574418
+    """
+    try:
+        json.dumps(data)
+    except TypeError:
+        # use `vars` to coerce nested data into dictionaries
+        data_json_from_dicts = json.dumps(data, default=lambda x: vars(x))  # type: ignore
+        data_obj = json.loads(data_json_from_dicts)
+        data = type(data)(**data_obj)
+    return data
+
 async def async_data_generator(
     response, user_api_key_dict: UserAPIKeyAuth, request_data: dict
 ):
@@ -2897,6 +2912,7 @@ async def async_data_generator(
             )
 
             if isinstance(chunk, BaseModel):
+                chunk = ensure_serializable(chunk)
                 chunk = chunk.model_dump_json(exclude_none=True, exclude_unset=True)
 
             try:
